@@ -45,7 +45,10 @@ module.exports = {
         defaultZone: 'default',
 
         // remove messages from queue if not delivered or bounced before maxQueueTime
-        maxQueueTime: 30 * 24 * 3600 * 1000
+        maxQueueTime: 30 * 24 * 3600 * 1000,
+
+        // log every poll query from queue
+        logQueuePolling: false
     },
 
     // plugin files to load into ZoneMTA, relative to ./plugins folder
@@ -197,6 +200,14 @@ module.exports = {
             addSignatureTimestamp: false,
             // Time validity of the signature given in seconds, for default value see below
             signatureExpireIn: 0
+        },
+
+        // Make sure messages have all required headers like Date or Message-ID
+        'core/delivery-loop': {
+            enabled: ['receiver', 'main'],
+
+            // Reject messages with higher Received count
+            maxHops: 35
         }
     },
 

@@ -1,5 +1,52 @@
 # Changelog
 
+## [3.9.6](https://github.com/zone-eu/zone-mta/compare/v3.9.5...v3.9.6) (2024-05-13)
+
+
+### Bug Fixes
+
+* **deps:** Bumped deps to clear out some security warnings ([3849037](https://github.com/zone-eu/zone-mta/commit/3849037ba0a6a680c4b9a3d2e4bd371c58bc33aa))
+
+## [3.9.5](https://github.com/zone-eu/zone-mta/compare/v3.9.4...v3.9.5) (2024-03-27)
+
+
+### Bug Fixes
+
+* **api:** Added query argument `includeDisabled` to /zones API endpoint. If `true` returns all zones ([fb826d6](https://github.com/zone-eu/zone-mta/commit/fb826d6de294f23387b1fb4ef90ad20889779113))
+
+## [3.9.4](https://github.com/zone-eu/zone-mta/compare/v3.9.3...v3.9.4) (2024-02-09)
+
+
+### Bug Fixes
+
+* **logs:** send bounce information to remote log ([3fd3986](https://github.com/zone-eu/zone-mta/commit/3fd3986b3874071e135060fca7695a23715c4ff1))
+
+## [3.9.3](https://github.com/zone-eu/zone-mta/compare/v3.9.2...v3.9.3) (2024-02-08)
+
+
+### Bug Fixes
+
+* **bounces:** fixed bounce handling in mail queue ([05d2b8d](https://github.com/zone-eu/zone-mta/commit/05d2b8d6ec21d4c280b5da7e7e1dd1053354f49d))
+* **sts:** do not try to store error object as JSON value ([9a45336](https://github.com/zone-eu/zone-mta/commit/9a45336a2bc92247c95880abf1aa0df42b682b2a))
+
+## [3.9.2](https://github.com/zone-eu/zone-mta/compare/v3.9.1...v3.9.2) (2024-02-08)
+
+
+### Bug Fixes
+
+* **deps:** bumped nodemailer and smtp-server versions ([0a2371d](https://github.com/zone-eu/zone-mta/commit/0a2371dbc4dc5874ebea04b8ce3568030039d853))
+* **logs:** added new remote log entry QUEUE_POLL ([800b583](https://github.com/zone-eu/zone-mta/commit/800b5835e99a7f1e0370b114b2821464785ac30a))
+
+## [3.9.1](https://github.com/zone-eu/zone-mta/compare/v3.9.0...v3.9.1) (2024-02-02)
+
+
+### Bug Fixes
+
+* **api:** added endpoint to list locked domains ([25102ca](https://github.com/zone-eu/zone-mta/commit/25102ca71010951fb592c6d8bdb4852976a49c1e))
+* **loop:** reject messages with too many Received headers ([cbffa6d](https://github.com/zone-eu/zone-mta/commit/cbffa6d3dcadb937b9303a42fbe2603fd1668fb8))
+* **mime-head:** Increased allowd MIME node header size to 2MB ([26e4896](https://github.com/zone-eu/zone-mta/commit/26e48967bd96e8aa08b1986513fe4733961bd672))
+* **tls-options:** Retrieve ignoreTLS value from Sending Zone, or default to false ([#365](https://github.com/zone-eu/zone-mta/issues/365)) ([336e835](https://github.com/zone-eu/zone-mta/commit/336e8358be5992bd15392fc07064540fda4aa23d))
+
 ## [3.9.0](https://github.com/zone-eu/zone-mta/compare/v3.8.0...v3.9.0) (2024-01-19)
 
 
