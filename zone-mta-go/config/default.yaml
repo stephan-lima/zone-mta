@@ -1,0 +1,110 @@
+# ZoneMTA-Go Default Configuration
+
+# Application settings
+app:
+  name: "ZoneMTA-Go"
+  ident: "zone-mta-go"
+  # user: "nobody"
+  # group: "nogroup"
+
+# Database connections
+databases:
+  mongodb:
+    uri: "mongodb://127.0.0.1:27017/zone-mta-go"
+    database: "zone-mta-go"
+    timeout: 10s
+  redis:
+    host: "127.0.0.1"
+    port: 6379
+    db: 3
+    timeout: 10s
+
+# Mail queue configuration
+queue:
+  instanceId: "default"
+  collection: "zone-queue"
+  gridfsCollection: "mail"
+  disableGC: false
+  defaultZone: "default"
+  maxQueueTime: "720h" # 30 days
+  logQueuePolling: false
+
+# SMTP interfaces configuration
+smtp:
+  interfaces:
+    feeder:
+      enabled: true
+      port: 2525
+      host: "127.0.0.1"
+      secure: false
+      authentication: false
+      maxConnections: 100
+      maxRecipients: 100
+      disableSTARTTLS: false
+
+# HTTP API configuration
+api:
+  enabled: true
+  port: 12080
+  host: "127.0.0.1"
+  maxRecipients: 100
+
+# Logging configuration
+logging:
+  level: "info"
+  format: "text" # or "json"
+
+# Metrics configuration
+metrics:
+  enabled: true
+  port: 9090
+  path: "/metrics"
+
+# Plugin configuration
+plugins:
+  # Built-in plugins
+  default-headers:
+    enabled: true
+    addMissing: ["message-id", "date"]
+    xOriginatingIP: true
+  
+  # Example: Message logging plugin for debugging and monitoring
+  message-logger:
+    enabled: false
+    logLevel: "info"
+    logEvents: ["receive", "queue", "delivered", "bounced"]
+    includeBody: false
+    maxBodyLength: 1000
+  
+  # Example: Rate limiting plugin
+  rate-limiter:
+    enabled: false
+    limits:
+      sender: "100/hour"    # 100 emails per hour per sender
+      ip: "1000/hour"       # 1000 emails per hour per IP
+      interface: "5000/hour" # 5000 emails per hour per interface
+    whitelistIp:
+      - "127.0.0.1"
+      - "::1"
+    action: "defer"         # "defer" or "reject"
+    message: "Rate limit exceeded, please try again later"
+  
+  # Example: DKIM signing plugin (not implemented in this example)
+  dkim-sign:
+    enabled: false
+    # Configure DKIM signing if needed
+
+# Sending zones configuration
+sendingZones:
+  default:
+    name: "default"
+    connections: 5
+    connectionTime: "10m"
+    throttling: "100/hour"
+    poolConnections: true
+
+# Performance settings
+performance:
+  maxConnections: 1000
+  workerCount: 4
+  bufferSize: 4096

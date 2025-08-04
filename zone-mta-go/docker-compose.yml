@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  zone-mta-go:
+    build: .
+    ports:
+      - "2525:2525"   # SMTP
+      - "12080:12080" # HTTP API
+      - "9090:9090"   # Metrics
+    depends_on:
+      - mongodb
+      - redis
+    volumes:
+      - ./config:/app/config:ro
+      - zone_mta_data:/app/data
+      - zone_mta_logs:/app/logs
+    environment:
+      - TZ=UTC
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:12080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  mongodb:
+    image: mongo:7-jammy
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    environment:
+      - MONGO_INITDB_DATABASE=zone-mta-go
+    restart: unless-stopped
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Optional: MongoDB Express for database administration
+  mongo-express:
+    image: mongo-express:latest
+    ports:
+      - "8081:8081"
+    depends_on:
+      - mongodb
+    environment:
+      - ME_CONFIG_MONGODB_URL=mongodb://mongodb:27017/zone-mta-go
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=admin123
+    restart: unless-stopped
+    profiles:
+      - admin
+
+  # Optional: Redis Commander for Redis administration
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    ports:
+      - "8082:8081"
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    restart: unless-stopped
+    profiles:
+      - admin
+
+volumes:
+  mongodb_data:
+    driver: local
+  mongodb_config:
+    driver: local
+  redis_data:
+    driver: local
+  zone_mta_data:
+    driver: local
+  zone_mta_logs:
+    driver: local
+
+networks:
+  default:
+    name: zone-mta-network
