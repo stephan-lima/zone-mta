@@ -1,0 +1,68 @@
+# Development environment configuration overrides
+
+# Application settings for development
+app:
+  name: "ZoneMTA-Go Development"
+
+# Development database connections (localhost)
+databases:
+  mongodb:
+    uri: "mongodb://localhost:27017/zone-mta-dev"
+    database: "zone-mta-dev"
+  redis:
+    host: "localhost"
+    port: 6379
+    db: 1
+
+# Development logging (debug level)
+logging:
+  level: "debug"
+  format: "text"
+
+# Development SMTP configuration
+smtp:
+  interfaces:
+    feeder:
+      enabled: true
+      port: 2525
+      host: "127.0.0.1"
+      maxConnections: 10
+      maxRecipients: 5
+
+# Development API configuration
+api:
+  enabled: true
+  port: 12080
+  host: "127.0.0.1"
+  maxRecipients: 10
+
+# Development plugins (enable debugging)
+plugins:
+  default-headers:
+    enabled: true
+    addMissing: ["message-id", "date"]
+    xOriginatingIP: true
+  
+  message-logger:
+    enabled: true
+    logLevel: "debug"
+    logEvents: ["receive", "queue", "pre_send", "post_send", "delivered", "bounced"]
+    includeBody: true
+    maxBodyLength: 500
+  
+  rate-limiter:
+    enabled: false  # Disabled for development
+
+# Development sending zones (lower limits)
+sendingZones:
+  default:
+    name: "default"
+    connections: 2
+    connectionTime: "10m"
+    throttling: "10/hour"
+
+# Development performance settings
+performance:
+  maxConnections: 100
+  workerCount: 2
+  bufferSize: 1024

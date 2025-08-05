@@ -1,0 +1,77 @@
+# Production environment configuration overrides
+
+# Application settings for production
+app:
+  name: "ZoneMTA-Go Production"
+
+# Production database connections
+databases:
+  mongodb:
+    uri: "mongodb://mongo-cluster:27017/zone-mta-production"
+    database: "zone-mta-production"
+  redis:
+    host: "redis-cluster"
+    port: 6379
+    db: 0
+
+# Production logging
+logging:
+  level: "info"
+  format: "json"
+
+# Production SMTP configuration
+smtp:
+  interfaces:
+    feeder:
+      enabled: true
+      port: 2525
+      host: "0.0.0.0"  # Listen on all interfaces in production
+      maxConnections: 500
+      maxRecipients: 100
+
+# Production API configuration  
+api:
+  enabled: true
+  port: 12080
+  host: "0.0.0.0"  # Listen on all interfaces in production
+  maxRecipients: 1000
+
+# Production metrics
+metrics:
+  enabled: true
+  port: 9090
+
+# Production sending zones with higher limits
+sendingZones:
+  default:
+    name: "default"
+    connections: 10
+    connectionTime: "5m"
+    throttling: "500/hour"
+  
+  high-volume:
+    name: "high-volume"
+    connections: 20
+    connectionTime: "3m"
+    throttling: "2000/hour"
+
+# Production plugins
+plugins:
+  default-headers:
+    enabled: true
+    addMissing: ["message-id", "date"]
+    xOriginatingIP: true
+  
+  rate-limiter:
+    enabled: true
+    limits:
+      sender: "500/hour"
+      ip: "5000/hour"
+      interface: "10000/hour"
+    action: "defer"
+
+# Production performance settings
+performance:
+  maxConnections: 2000
+  workerCount: 8
+  bufferSize: 8192

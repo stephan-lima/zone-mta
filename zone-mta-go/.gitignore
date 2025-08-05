@@ -38,8 +38,10 @@ Thumbs.db
 
 # Local configuration files
 config/local.yaml
-config/dev.yaml
-config/production.yaml
+config/secrets.yaml
+config/override.yaml
+config/*.local.yaml
+config/*.secret.yaml
 
 # Log files
 *.log

@@ -75,7 +75,47 @@ The server will start with:
 
 ## Configuration
 
-ZoneMTA-Go uses YAML configuration files. See `config/default.yaml` for all available options.
+ZoneMTA-Go supports flexible multi-file YAML configuration with environment-specific overrides.
+
+### Configuration Methods
+
+#### Single File (Default)
+```bash
+./zone-mta -config config/default.yaml
+```
+
+#### Environment-Specific Loading
+```bash
+# Loads default.yaml + production.yaml
+./zone-mta -env production
+
+# Loads default.yaml + development.yaml
+./zone-mta -env development
+```
+
+#### Directory-Based Loading
+```bash
+# Loads all YAML files from config/ directory with automatic prioritization
+./zone-mta -config-dir config
+```
+
+#### Multiple Files
+```bash
+# Explicitly specify files to merge
+./zone-mta -config-files "config/default.yaml,config/production.yaml,config/secrets.yaml"
+```
+
+### Configuration File Priority
+
+When using directory or multi-file loading, files are loaded in this order:
+1. `default.yaml` (base configuration)
+2. Environment files (`production.yaml`, `development.yaml`, etc.)
+3. Local overrides (`local.yaml`, `override.yaml`)
+4. Secrets (`secrets.yaml`)
+
+Later files override values from earlier files.
+
+See `docs/CONFIGURATION.md` for detailed configuration documentation.
 
 ### Key Configuration Sections
 
@@ -197,6 +237,17 @@ cd examples/plugin-example
 go run main.go
 ```
 
+### Metrics Example
+
+Test the Prometheus metrics server:
+
+```bash
+cd examples/metrics-example
+go run main.go
+```
+
+This will start a metrics server on port 9090 with simulated data to demonstrate the available metrics.
+
 ## Docker Support
 
 ### Using Docker
@@ -254,13 +305,53 @@ ZoneMTA-Go is designed for high performance:
 curl http://localhost:12080/health
 ```
 
-### Metrics
+### Prometheus Metrics
 
-Prometheus-compatible metrics are available at `/metrics` endpoint:
+ZoneMTA-Go includes a dedicated Prometheus metrics server on port 9090:
 
 ```bash
-curl http://localhost:12080/api/v1/system/metrics
+# Check metrics server health
+curl http://localhost:9090/health
+
+# Get Prometheus metrics
+curl http://localhost:9090/metrics
+
+# View ZoneMTA-specific metrics
+curl http://localhost:9090/metrics | grep zonemta_
 ```
+
+#### Available Metrics
+
+- **Mail Processing**: `zonemta_mails_received_total`, `zonemta_mails_delivered_total`, `zonemta_mails_bounced_total`
+- **Queue Management**: `zonemta_queue_size`, `zonemta_queue_age_seconds`, `zonemta_delivery_duration_seconds`
+- **SMTP Operations**: `zonemta_smtp_connections`, `zonemta_smtp_commands_total`
+- **System Health**: `zonemta_db_connections`, `zonemta_errors_total`
+- **Rate Limiting**: `zonemta_rate_limit_hits_total`
+
+#### Example Prometheus Queries
+
+```promql
+# Rate of emails received per minute
+rate(zonemta_mails_received_total[1m])
+
+# Current queue size by zone
+zonemta_queue_size
+
+# 95th percentile delivery time
+histogram_quantile(0.95, zonemta_delivery_duration_seconds_bucket)
+
+# Error rate per minute
+rate(zonemta_errors_total[5m])
+```
+
+#### Grafana Dashboard
+
+The metrics are designed to work with Grafana. Key visualizations:
+- Email throughput over time
+- Queue size trends
+- Delivery performance histograms
+- Error rate monitoring
+- System resource usage
 
 ## Differences from Original ZoneMTA
 

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -158,6 +160,299 @@ func LoadFromDir(configDir string) (*Config, error) {
 	}
 
 	return nil, fmt.Errorf("no configuration file found in directory: %s", configDir)
+}
+
+// LoadMultipleFiles loads and merges multiple YAML configuration files
+// Files are loaded in alphabetical order, with later files overriding earlier ones
+func LoadMultipleFiles(configPaths []string) (*Config, error) {
+	if len(configPaths) == 0 {
+		return nil, fmt.Errorf("no configuration files provided")
+	}
+
+	// Load first file as base
+	config, err := Load(configPaths[0])
+	if err != nil {
+		return nil, fmt.Errorf("failed to load base config %s: %w", configPaths[0], err)
+	}
+
+	// Merge additional files
+	for _, configPath := range configPaths[1:] {
+		if err := mergeConfigFile(config, configPath); err != nil {
+			return nil, fmt.Errorf("failed to merge config %s: %w", configPath, err)
+		}
+	}
+
+	return config, nil
+}
+
+// LoadFromDirWithOverrides loads all YAML files from a directory and merges them
+// Files are loaded in this order:
+// 1. default.yaml (base configuration)
+// 2. environment-specific files (e.g., production.yaml, development.yaml)
+// 3. local overrides (e.g., local.yaml, override.yaml)
+// 4. any other .yaml/.yml files in alphabetical order
+func LoadFromDirWithOverrides(configDir string) (*Config, error) {
+	// Check if directory exists
+	if _, err := os.Stat(configDir); os.IsNotExist(err) {
+		return nil, fmt.Errorf("configuration directory not found: %s", configDir)
+	}
+
+	// Find all YAML files
+	files, err := findYamlFiles(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find YAML files: %w", err)
+	}
+
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no YAML configuration files found in directory: %s", configDir)
+	}
+
+	// Sort files by priority and then alphabetically
+	sortedFiles := sortConfigFiles(files)
+
+	return LoadMultipleFiles(sortedFiles)
+}
+
+// findYamlFiles finds all YAML files in a directory
+func findYamlFiles(dir string) ([]string, error) {
+	var files []string
+
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip directories
+		if info.IsDir() {
+			return nil
+		}
+
+		// Check for YAML extensions
+		ext := strings.ToLower(filepath.Ext(path))
+		if ext == ".yaml" || ext == ".yml" {
+			files = append(files, path)
+		}
+
+		return nil
+	})
+
+	return files, err
+}
+
+// sortConfigFiles sorts configuration files by priority
+func sortConfigFiles(files []string) []string {
+	// Define priority order
+	priorityOrder := map[string]int{
+		"default.yaml":     1,
+		"default.yml":      1,
+		"base.yaml":        2,
+		"base.yml":         2,
+		"production.yaml":  10,
+		"production.yml":   10,
+		"staging.yaml":     10,
+		"staging.yml":      10,
+		"development.yaml": 10,
+		"development.yml":  10,
+		"dev.yaml":         10,
+		"dev.yml":          10,
+		"test.yaml":        10,
+		"test.yml":         10,
+		"local.yaml":       20,
+		"local.yml":        20,
+		"override.yaml":    30,
+		"override.yml":     30,
+		"secrets.yaml":     40,
+		"secrets.yml":      40,
+	}
+
+	// Sort files
+	sort.Slice(files, func(i, j int) bool {
+		nameI := filepath.Base(files[i])
+		nameJ := filepath.Base(files[j])
+
+		priorityI, hasI := priorityOrder[nameI]
+		priorityJ, hasJ := priorityOrder[nameJ]
+
+		// If both have priorities, sort by priority
+		if hasI && hasJ {
+			return priorityI < priorityJ
+		}
+
+		// If only one has priority, it comes first
+		if hasI {
+			return true
+		}
+		if hasJ {
+			return false
+		}
+
+		// If neither has priority, sort alphabetically
+		return nameI < nameJ
+	})
+
+	return files
+}
+
+// mergeConfigFile merges a configuration file into an existing config
+func mergeConfigFile(baseConfig *Config, configPath string) error {
+	// Check if file exists
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		return fmt.Errorf("configuration file not found: %s", configPath)
+	}
+
+	// Read the file
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to read configuration file: %w", err)
+	}
+
+	// Parse YAML into a temporary config
+	var overrideConfig Config
+	if err := yaml.Unmarshal(data, &overrideConfig); err != nil {
+		return fmt.Errorf("failed to parse configuration: %w", err)
+	}
+
+	// Merge configurations
+	mergeConfigs(baseConfig, &overrideConfig)
+
+	return nil
+}
+
+// MergeConfigs merges override config into base config (exported version)
+func MergeConfigs(base *Config, override *Config) {
+	mergeConfigs(base, override)
+}
+
+// mergeConfigs merges override config into base config
+func mergeConfigs(base *Config, override *Config) {
+	// Merge app config
+	if override.App.Name != "" {
+		base.App.Name = override.App.Name
+	}
+	if override.App.Ident != "" {
+		base.App.Ident = override.App.Ident
+	}
+	if override.App.User != "" {
+		base.App.User = override.App.User
+	}
+	if override.App.Group != "" {
+		base.App.Group = override.App.Group
+	}
+
+	// Merge database config
+	if override.Databases.MongoDB.URI != "" {
+		base.Databases.MongoDB.URI = override.Databases.MongoDB.URI
+	}
+	if override.Databases.MongoDB.Database != "" {
+		base.Databases.MongoDB.Database = override.Databases.MongoDB.Database
+	}
+	if override.Databases.MongoDB.Timeout != 0 {
+		base.Databases.MongoDB.Timeout = override.Databases.MongoDB.Timeout
+	}
+	if override.Databases.Redis.Host != "" {
+		base.Databases.Redis.Host = override.Databases.Redis.Host
+	}
+	if override.Databases.Redis.Port != 0 {
+		base.Databases.Redis.Port = override.Databases.Redis.Port
+	}
+	if override.Databases.Redis.DB != 0 {
+		base.Databases.Redis.DB = override.Databases.Redis.DB
+	}
+	if override.Databases.Redis.Timeout != 0 {
+		base.Databases.Redis.Timeout = override.Databases.Redis.Timeout
+	}
+
+	// Merge queue config
+	if override.Queue.InstanceID != "" {
+		base.Queue.InstanceID = override.Queue.InstanceID
+	}
+	if override.Queue.Collection != "" {
+		base.Queue.Collection = override.Queue.Collection
+	}
+	if override.Queue.GridFSCollection != "" {
+		base.Queue.GridFSCollection = override.Queue.GridFSCollection
+	}
+	if override.Queue.DefaultZone != "" {
+		base.Queue.DefaultZone = override.Queue.DefaultZone
+	}
+	if override.Queue.MaxQueueTime != 0 {
+		base.Queue.MaxQueueTime = override.Queue.MaxQueueTime
+	}
+	// Override boolean values directly
+	base.Queue.DisableGC = override.Queue.DisableGC
+	base.Queue.LogQueuePolling = override.Queue.LogQueuePolling
+
+	// Merge SMTP interfaces (replace entirely if provided)
+	if len(override.SMTP.Interfaces) > 0 {
+		if base.SMTP.Interfaces == nil {
+			base.SMTP.Interfaces = make(map[string]SMTPInterfaceConfig)
+		}
+		for name, config := range override.SMTP.Interfaces {
+			base.SMTP.Interfaces[name] = config
+		}
+	}
+
+	// Merge API config
+	if override.API.Port != 0 {
+		base.API.Port = override.API.Port
+	}
+	if override.API.Host != "" {
+		base.API.Host = override.API.Host
+	}
+	if override.API.MaxRecipients != 0 {
+		base.API.MaxRecipients = override.API.MaxRecipients
+	}
+	// Override boolean values directly
+	base.API.Enabled = override.API.Enabled
+
+	// Merge logging config
+	if override.Logging.Level != "" {
+		base.Logging.Level = override.Logging.Level
+	}
+	if override.Logging.Format != "" {
+		base.Logging.Format = override.Logging.Format
+	}
+
+	// Merge metrics config
+	if override.Metrics.Port != 0 {
+		base.Metrics.Port = override.Metrics.Port
+	}
+	if override.Metrics.Path != "" {
+		base.Metrics.Path = override.Metrics.Path
+	}
+	// Override boolean values directly
+	base.Metrics.Enabled = override.Metrics.Enabled
+
+	// Merge plugins (replace entirely if provided)
+	if len(override.Plugins) > 0 {
+		if base.Plugins == nil {
+			base.Plugins = make(map[string]interface{})
+		}
+		for name, config := range override.Plugins {
+			base.Plugins[name] = config
+		}
+	}
+
+	// Merge sending zones (replace entirely if provided)
+	if len(override.SendingZones) > 0 {
+		if base.SendingZones == nil {
+			base.SendingZones = make(map[string]SendingZoneConfig)
+		}
+		for name, config := range override.SendingZones {
+			base.SendingZones[name] = config
+		}
+	}
+
+	// Merge performance config
+	if override.Performance.MaxConnections != 0 {
+		base.Performance.MaxConnections = override.Performance.MaxConnections
+	}
+	if override.Performance.WorkerCount != 0 {
+		base.Performance.WorkerCount = override.Performance.WorkerCount
+	}
+	if override.Performance.BufferSize != 0 {
+		base.Performance.BufferSize = override.Performance.BufferSize
+	}
 }
 
 // setDefaults sets default values for configuration options

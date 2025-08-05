@@ -148,6 +148,29 @@ show-config:
 	@echo "Showing configuration..."
 	go run $(BINARY_PATH) -show-config -config $(CONFIG_PATH)
 
+# Show configuration files that would be loaded
+.PHONY: show-config-files
+show-config-files:
+	@echo "Showing configuration files..."
+	go run $(BINARY_PATH) -show-files -config-dir config
+
+# Show configuration for different environments
+.PHONY: show-config-dev
+show-config-dev:
+	@echo "Showing development configuration..."
+	go run $(BINARY_PATH) -show-config -env development
+
+.PHONY: show-config-prod
+show-config-prod:
+	@echo "Showing production configuration..."
+	go run $(BINARY_PATH) -show-config -env production
+
+# Test multi-file configuration loading
+.PHONY: test-config-multi
+test-config-multi:
+	@echo "Testing multi-file configuration loading..."
+	go run $(BINARY_PATH) -show-config -config-files "config/default.yaml,config/development.yaml,config/local.yaml"
+
 # Show version
 .PHONY: version
 version:
@@ -189,6 +212,12 @@ plugin-example:
 	@echo "Running plugin development example..."
 	cd examples/plugin-example && go run main.go
 
+# Run metrics example
+.PHONY: metrics-example
+metrics-example:
+	@echo "Running metrics server example..."
+	cd examples/metrics-example && go run main.go
+
 # Help
 .PHONY: help
 help:
@@ -216,4 +245,9 @@ help:
 	@echo "  check-queue   - Check queue statistics"
 	@echo "  health        - Check application health"
 	@echo "  plugin-example- Run plugin development example"
+	@echo "  metrics-example - Run metrics server example"
+	@echo "  show-config-files - Show configuration files that would be loaded"
+	@echo "  show-config-dev - Show development configuration"
+	@echo "  show-config-prod - Show production configuration"
+	@echo "  test-config-multi - Test multi-file configuration loading"
 	@echo "  help          - Show this help"

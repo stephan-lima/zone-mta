@@ -64,7 +64,6 @@ func (s *Server) registerRoutes() {
 
 	// System operations
 	s.mux.HandleFunc("/api/v1/system/status", s.handleSystemStatus)
-	s.mux.HandleFunc("/api/v1/system/metrics", s.handleMetrics)
 }
 
 // Start starts the API server
@@ -365,16 +364,7 @@ func (s *Server) handleSystemStatus(w http.ResponseWriter, r *http.Request) {
 	s.writeJSONResponse(w, http.StatusOK, status)
 }
 
-func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// This would integrate with Prometheus metrics
-	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte("# ZoneMTA-Go Metrics\n# TODO: Implement Prometheus metrics\n"))
-}
+// Note: Metrics are now served by the dedicated metrics server on port 9090
 
 // Helper methods
 
