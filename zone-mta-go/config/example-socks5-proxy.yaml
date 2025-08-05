@@ -1,0 +1,124 @@
+# Example ZoneMTA-Go configuration with SOCKS5 proxy plugin
+
+app:
+  name: "ZoneMTA-Go with SOCKS5 Proxy"
+  ident: "zone-mta-go"
+
+databases:
+  mongodb:
+    uri: "mongodb://127.0.0.1:27017/zone-mta-go"
+    database: "zone-mta-go"
+    timeout: 10s
+  redis:
+    host: "127.0.0.1"
+    port: 6379
+    db: 0
+    timeout: 10s
+
+queue:
+  instanceId: "default"
+  collection: "zone-queue"
+  gridfsCollection: "mail"
+  defaultZone: "default"
+  maxQueueTime: 720h # 30 days
+
+smtp:
+  interfaces:
+    default:
+      enabled: true
+      port: 2525
+      host: "0.0.0.0"
+      secure: false
+      authentication: false
+      maxConnections: 100
+      maxRecipients: 100
+
+api:
+  enabled: true
+  port: 8080
+  host: "127.0.0.1"
+  maxRecipients: 100
+
+logging:
+  level: "info"
+  format: "text"
+
+metrics:
+  enabled: true
+  port: 9090
+  path: "/metrics"
+
+# Plugin configuration
+plugins:
+  # Enable the SOCKS5 proxy plugin
+  socks5-proxy:
+    enabled: true
+    rules:
+      # Route all marketing zone traffic through proxy with authentication
+      - zone: "marketing"
+        proxyHost: "proxy1.example.com"
+        proxyPort: 1080
+        username: "marketing_user"
+        password: "marketing_pass"
+        enabled: true
+
+      # Route traffic to Gmail through a specific proxy
+      - host: "gmail-smtp-in.l.google.com"
+        proxyHost: "gmail-proxy.example.com"
+        proxyPort: 1080
+        enabled: true
+
+      # Route bulk mail through a different proxy (no auth)
+      - zone: "bulk"
+        proxyHost: "10.0.1.100"
+        proxyPort: 1080
+        enabled: true
+
+      # Route specific high-priority recipients through premium proxy
+      - recipient: "vip@important-client.com"
+        proxyHost: "premium-proxy.example.com"
+        proxyPort: 1080
+        username: "premium_user"
+        password: "premium_pass"
+        enabled: true
+
+      # Catch-all rule for 'anonymous' zone through Tor proxy
+      - zone: "anonymous"
+        proxyHost: "127.0.0.1"
+        proxyPort: 9050  # Tor SOCKS port
+        enabled: true
+
+# Sending zones configuration
+sendingZones:
+  default:
+    name: "Default"
+    connections: 5
+    connectionTime: 60s
+    throttling: "default"
+    poolConnections: true
+
+  marketing:
+    name: "Marketing"
+    connections: 10
+    connectionTime: 30s
+    throttling: "marketing"
+    poolConnections: true
+
+  bulk:
+    name: "Bulk Mail"
+    connections: 20
+    connectionTime: 120s
+    throttling: "bulk"
+    poolConnections: false
+
+  anonymous:
+    name: "Anonymous"
+    connections: 2
+    connectionTime: 180s
+    throttling: "slow"
+    poolConnections: false
+
+performance:
+  maxConnections: 1000
+  workerCount: 8
+  bufferSize: 4096

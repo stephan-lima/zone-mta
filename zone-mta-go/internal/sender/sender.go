@@ -12,30 +12,33 @@ import (
 	"time"
 
 	"github.com/zone-eu/zone-mta-go/internal/config"
+	"github.com/zone-eu/zone-mta-go/internal/plugin"
 	"github.com/zone-eu/zone-mta-go/internal/queue"
 )
 
 // Sender handles mail delivery
 type Sender struct {
-	queue    *queue.Manager
-	config   config.SendingZoneConfig
-	zone     string
-	logger   *slog.Logger
-	workers  []*Worker
-	shutdown chan struct{}
-	wg       sync.WaitGroup
-	running  bool
-	mu       sync.RWMutex
+	queue         *queue.Manager
+	config        config.SendingZoneConfig
+	zone          string
+	logger        *slog.Logger
+	workers       []*Worker
+	shutdown      chan struct{}
+	wg            sync.WaitGroup
+	running       bool
+	mu            sync.RWMutex
+	pluginManager *plugin.Manager
 }
 
 // NewSender creates a new mail sender for a specific zone
-func NewSender(zone string, cfg config.SendingZoneConfig, queueMgr *queue.Manager, logger *slog.Logger) *Sender {
+func NewSender(zone string, cfg config.SendingZoneConfig, queueMgr *queue.Manager, pluginMgr *plugin.Manager, logger *slog.Logger) *Sender {
 	return &Sender{
-		queue:    queueMgr,
-		config:   cfg,
-		zone:     zone,
-		logger:   logger.With("component", "sender", "zone", zone),
-		shutdown: make(chan struct{}),
+		queue:         queueMgr,
+		config:        cfg,
+		zone:          zone,
+		logger:        logger.With("component", "sender", "zone", zone),
+		shutdown:      make(chan struct{}),
+		pluginManager: pluginMgr,
 	}
 }
 
@@ -243,8 +246,8 @@ func (w *Worker) deliverViaMX(ctx context.Context, mxHost string, msg *queue.Que
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
-	// Connect to MX server
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort(mxHost, "25"), 30*time.Second)
+	// Connect to MX server (with plugin hook support)
+	conn, err := w.connectWithHooks(ctx, mxHost, "25", msg, recipient)
 	if err != nil {
 		return time.Since(start), fmt.Errorf("failed to connect to %s: %w", mxHost, err)
 	}
@@ -302,6 +305,64 @@ func (w *Worker) deliverViaMX(ctx context.Context, mxHost string, msg *queue.Que
 	return time.Since(start), nil
 }
 
+// connectWithHooks establishes a connection using plugin hooks for customization
+func (w *Worker) connectWithHooks(ctx context.Context, host, port string, msg *queue.QueuedMessage, recipient string) (net.Conn, error) {
+	// Get local IP that would be used for this connection
+	localIP, err := w.getLocalIP(host, port)
+	if err != nil {
+		localIP = "unknown" // Continue even if we can't determine local IP
+	}
+
+	// Create hook data with connection information
+	hookData := &plugin.HookData{
+		Message: msg,
+		Connection: &plugin.ConnectionData{
+			TargetHost:    host,
+			TargetPort:    port,
+			LocalIP:       localIP,
+			Zone:          w.sender.zone,
+			Recipient:     recipient,
+			MessageID:     msg.MessageID,
+			DeliveryCount: msg.DeliveryAttempts,
+		},
+		Result: &plugin.HookResult{},
+	}
+
+	// Execute connection hooks
+	if w.sender.pluginManager != nil {
+		if err := w.sender.pluginManager.ExecuteHooks(ctx, plugin.HookConnection, hookData); err != nil {
+			return nil, fmt.Errorf("connection hook failed: %w", err)
+		}
+
+		// Check if a plugin provided a custom connection
+		if hookData.Result.Connection != nil {
+			w.sender.logger.Debug("Using plugin-provided connection", "host", host, "port", port)
+			return hookData.Result.Connection, nil
+		}
+	}
+
+	// Fall back to default connection
+	w.sender.logger.Debug("Using default connection", "host", host, "port", port)
+	return net.DialTimeout("tcp", net.JoinHostPort(host, port), 30*time.Second)
+}
+
+// getLocalIP determines the local IP that would be used for connecting to the target
+func (w *Worker) getLocalIP(targetHost, targetPort string) (string, error) {
+	// Create a test connection to determine the local IP
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(targetHost, targetPort), 5*time.Second)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr()
+	if tcpAddr, ok := localAddr.(*net.TCPAddr); ok {
+		return tcpAddr.IP.String(), nil
+	}
+
+	return localAddr.String(), nil
+}
+
 // isPermanentError checks if an error is a permanent delivery failure
 func isPermanentError(err error) bool {
 	errStr := strings.ToLower(err.Error())
@@ -334,18 +395,20 @@ func isPermanentError(err error) bool {
 
 // SenderManager manages multiple senders for different zones
 type SenderManager struct {
-	senders map[string]*Sender
-	queue   *queue.Manager
-	logger  *slog.Logger
-	mu      sync.RWMutex
+	senders       map[string]*Sender
+	queue         *queue.Manager
+	logger        *slog.Logger
+	mu            sync.RWMutex
+	pluginManager *plugin.Manager
 }
 
 // NewSenderManager creates a new sender manager
-func NewSenderManager(queueMgr *queue.Manager, logger *slog.Logger) *SenderManager {
+func NewSenderManager(queueMgr *queue.Manager, pluginMgr *plugin.Manager, logger *slog.Logger) *SenderManager {
 	return &SenderManager{
-		senders: make(map[string]*Sender),
-		queue:   queueMgr,
-		logger:  logger.With("component", "sender-manager"),
+		senders:       make(map[string]*Sender),
+		queue:         queueMgr,
+		logger:        logger.With("component", "sender-manager"),
+		pluginManager: pluginMgr,
 	}
 }
 
@@ -354,7 +417,7 @@ func (sm *SenderManager) AddZone(zone string, cfg config.SendingZoneConfig) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
-	sender := NewSender(zone, cfg, sm.queue, sm.logger)
+	sender := NewSender(zone, cfg, sm.queue, sm.pluginManager, sm.logger)
 	sm.senders[zone] = sender
 }
 

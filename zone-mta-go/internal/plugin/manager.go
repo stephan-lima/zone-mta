@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"sync"
 
 	"github.com/zone-eu/zone-mta-go/internal/queue"
@@ -13,12 +14,13 @@ import (
 type HookType string
 
 const (
-	HookReceive   HookType = "receive"   // When a message is received
-	HookQueue     HookType = "queue"     // Before message is queued
-	HookPreSend   HookType = "pre_send"  // Before message is sent
-	HookPostSend  HookType = "post_send" // After message is sent
-	HookBounce    HookType = "bounce"    // When a message bounces
-	HookDelivered HookType = "delivered" // When a message is delivered
+	HookReceive    HookType = "receive"    // When a message is received
+	HookQueue      HookType = "queue"      // Before message is queued
+	HookPreSend    HookType = "pre_send"   // Before message is sent
+	HookPostSend   HookType = "post_send"  // After message is sent
+	HookBounce     HookType = "bounce"     // When a message bounces
+	HookDelivered  HookType = "delivered"  // When a message is delivered
+	HookConnection HookType = "connection" // Before establishing outgoing SMTP connection
 )
 
 // Hook represents a function that can be called at specific points
@@ -26,22 +28,35 @@ type Hook func(ctx context.Context, data *HookData) error
 
 // HookData contains data passed to hooks
 type HookData struct {
-	Message   *queue.QueuedMessage   `json:"message"`
-	Content   []byte                 `json:"content,omitempty"`
-	Error     error                  `json:"error,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
-	Interface string                 `json:"interface,omitempty"`
-	RemoteIP  string                 `json:"remoteIp,omitempty"`
-	Result    *HookResult            `json:"result,omitempty"`
+	Message    *queue.QueuedMessage   `json:"message"`
+	Content    []byte                 `json:"content,omitempty"`
+	Error      error                  `json:"error,omitempty"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+	Interface  string                 `json:"interface,omitempty"`
+	RemoteIP   string                 `json:"remoteIp,omitempty"`
+	Result     *HookResult            `json:"result,omitempty"`
+	Connection *ConnectionData        `json:"connection,omitempty"`
+}
+
+// ConnectionData contains connection-specific data for connection hooks
+type ConnectionData struct {
+	TargetHost    string `json:"targetHost"`    // Target MX hostname
+	TargetPort    string `json:"targetPort"`    // Target port (usually "25")
+	LocalIP       string `json:"localIp"`       // Local outgoing IP address
+	Zone          string `json:"zone"`          // Sending zone name
+	Recipient     string `json:"recipient"`     // Current recipient being delivered to
+	MessageID     string `json:"messageId"`     // Message ID being delivered
+	DeliveryCount int    `json:"deliveryCount"` // Number of delivery attempts
 }
 
 // HookResult contains the result of hook execution
 type HookResult struct {
-	Accept   bool                   `json:"accept"`
-	Reject   bool                   `json:"reject"`
-	Message  string                 `json:"message,omitempty"`
-	Headers  map[string]string      `json:"headers,omitempty"`
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	Accept     bool                   `json:"accept"`
+	Reject     bool                   `json:"reject"`
+	Message    string                 `json:"message,omitempty"`
+	Headers    map[string]string      `json:"headers,omitempty"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+	Connection net.Conn              `json:"-"` // Custom connection provided by plugin (not serialized)
 }
 
 // Plugin represents a plugin that can register hooks
